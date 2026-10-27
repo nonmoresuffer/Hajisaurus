@@ -265,6 +265,28 @@ footer .wrap > span:not(.mail){display:inline}
 .ai-move .abtn{min-height:36px;min-width:40px;padding:0 10px}
 .ai .seg button{min-height:32px;padding:0 9px;font-size:11px}
 .abtn:disabled{opacity:.35;cursor:default}
+.slotimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.ctile.has-img .shade{background:linear-gradient(to top,rgba(0,0,0,.75),rgba(0,0,0,.15) 65%,transparent)}
+.ctile.has-img .lab b{color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.5)}
+.ctile.has-img .lab small{color:#fff;opacity:.9}
+.ctile.has-img .badge{background:var(--btn);border-color:var(--btn);color:#fff}
+.tcard .tc-img,.panel .sample{position:relative;overflow:hidden}
+.ctile.blur .slotimg,.art.nsfwb .artimg{filter:blur(24px);transform:scale(1.2)}
+.ageov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px;text-align:center;background:rgba(0,0,0,.45);color:#fff}
+.ageov b{font-family:var(--f-display);font-weight:400;font-size:44px;line-height:1;color:#fff}
+.ageov small{font-size:13px}
+.art.nsfwb{cursor:pointer}
+.nsfwbtn[aria-pressed="true"]{background:var(--btn) !important;border-color:var(--btn) !important;color:#fff !important}
+.sgrp{margin-bottom:22px}
+.sgrp h3{margin:0 0 10px;font-family:var(--f-mono);font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--red-text)}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px}
+.slot{display:flex;gap:12px;padding:10px;border:1px solid var(--line);background:var(--card);min-width:0}
+.slot-img{position:relative;flex:0 0 96px;height:96px;overflow:hidden;background:var(--band);border:1px dashed var(--line);display:grid;place-items:center;font-size:11px;color:var(--muted)}
+.slot-body{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;gap:8px}
+.slot-body b{font-size:14px;color:var(--head)}
+.nsfwtag{font-style:normal;margin-left:4px;padding:1px 6px;background:var(--btn);color:#fff;font-family:var(--f-mono);font-size:10px}
+.slot-act{display:flex;flex-wrap:wrap;gap:6px}
+.slot-act .abtn{display:inline-flex;align-items:center;min-height:36px;padding:0 12px;font-size:12px;cursor:pointer}
 .qempty{padding:48px 28px;border:1px dashed var(--line);background:var(--card);display:flex;flex-direction:column;align-items:flex-start;gap:10px}
 .qempty b{font-family:var(--f-display);font-weight:400;font-size:clamp(40px,7vw,64px);line-height:1;color:var(--head)}
 .qempty p{margin:0;color:var(--muted)}
@@ -558,6 +580,7 @@ footer{border-top:1px solid var(--line)}
       <div class="atabs" role="tablist" aria-label="ส่วนที่จัดการ">
         <button type="button" role="tab" data-atab="queue" aria-selected="true">QUEUE</button>
         <button type="button" role="tab" data-atab="art" aria-selected="false">ARTWORK</button>
+        <button type="button" role="tab" data-atab="slots" aria-selected="false">COMMISSION</button>
         <button type="button" class="abtn" id="logout">ออกจากระบบ</button>
       </div>
       <div id="aq">
@@ -572,6 +595,7 @@ footer{border-top:1px solid var(--line)}
         <div class="aup">
           <div class="fld"><span class="lab">ประเภทงาน (ป้ายมุมขวาล่าง)</span><div class="seg" id="aupkind"></div></div>
           <div class="fld"><span class="lab">แนวภาพ</span><div class="seg" id="aupori"></div></div>
+          <label class="cbx" for="aupnsfw"><input type="checkbox" id="aupnsfw"><span>NSFW · เบลอไว้จนกว่าผู้ชมจะยืนยันอายุ 18+</span></label>
           <div class="aup-row">
             <label class="upl" for="aupfile">+ อัปโหลดรูป</label>
             <input id="aupfile" type="file" accept="image/jpeg,image/png,image/webp" multiple class="sr">
@@ -583,6 +607,11 @@ footer{border-top:1px solid var(--line)}
           <button type="button" class="btn" id="saveart">บันทึกลำดับ / การลบ</button>
         </div>
         <div class="alist" id="alist"></div>
+      </div>
+      <div id="aslots" hidden>
+        <p class="intro">รูปประกอบหน้า COMMISSION เลือกรูปแล้วระบบอัปโหลดให้ทันที รูปในช่อง NSFW จะเห็นได้หลังผู้ชมยืนยันอายุ 18+ เท่านั้น</p>
+        <p class="bmsg" id="slotmsg" role="status"></p>
+        <div id="slotlist"></div>
       </div>
     </div>
   </section>
@@ -819,7 +848,13 @@ footer{border-top:1px solid var(--line)}
   }).join('');
 
   // รูปปกของแต่ละหมวด (ไฟล์ที่อัปโหลดไว้กับเว็บ) เว้นว่าง = แสดงช่องรูป
-  var IMG = { sfw:'', nsfw:'', sketch:'', id:'', chibi:'' };
+  // รูปประกอบหน้า COMMISSION (อัปโหลดจากหน้า ADMIN แท็บ COMMISSION)
+  var SLOTS = {};
+  function slotImg(key) {
+    var v = SLOTS[key]; if (!v) return '';
+    if (/^data:/.test(v)) return '<img class="slotimg" src="' + v + '" alt="">';
+    return '<img class="slotimg" src="' + esc(artSrc({ id: v }, 1600)) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="if(!this.dataset.r){this.dataset.r=1;this.src=\'' + artAlt({ id: v }) + '\'}">';
+  }
   var TILES = [
     { id:'sfw', label:'SFW', cls:'wide r', from:350 },
     { id:'nsfw', label:'NSFW', cls:'wide', from:500, badge:'18+' },
@@ -829,9 +864,9 @@ footer{border-top:1px solid var(--line)}
   ];
   function renderPicker(){
     $('picker').innerHTML = TILES.map(function(t){
-      var img = IMG[t.id];
-      return '<button type="button" class="ctile ' + t.cls + (img ? ' has-img' : '') + '" data-cat="' + t.id + '" aria-label="' + t.label + ' เริ่มต้น ' + fmt(t.from) + '">' +
-        '<span class="img"' + (img ? ' style="background-image:url(\'' + esc(img) + '\')"' : '') + '></span><span class="shade"></span>' +
+      var img = slotImg('tile_' + t.id), blur = img && t.id === 'nsfw' && !S.ageOk;
+      return '<button type="button" class="ctile ' + t.cls + (img ? ' has-img' : '') + (blur ? ' blur' : '') + '" data-cat="' + t.id + '" aria-label="' + t.label + ' เริ่มต้น ' + fmt(t.from) + '">' +
+        '<span class="img">' + img + '</span><span class="shade"></span>' +
         (t.badge ? '<span class="badge">' + t.badge + '</span>' : '') +
         '<span class="lab"><b>' + t.label + '</b><small>FROM ' + fmt(t.from) + '</small></span></button>';
     }).join('');
@@ -887,7 +922,7 @@ footer{border-top:1px solid var(--line)}
       renderCalc(); return;
     }
     if (b.dataset.cqty) { C.qty = Math.min(20, Math.max(1, C.qty + Number(b.dataset.cqty))); renderCalc(); return; }
-    if (b.dataset.cage) { S.ageOk = true; renderPrices(); return; }
+    if (b.dataset.cage) { S.ageOk = true; renderPrices(); renderGallery(); return; }
     if (b.id === 'ccopy') {
       var txt = $('calcout').dataset.summary || '';
       var ok = function(){ b.textContent = 'คัดลอกแล้ว ✓'; setTimeout(function(){ if (b.isConnected) b.textContent = 'คัดลอกสรุปไปส่ง DM'; }, 1600); };
@@ -917,7 +952,7 @@ footer{border-top:1px solid var(--line)}
       box.innerHTML = '<h2 class="display tc-head">' + S.cat.toUpperCase() + '</h2><div class="tcards">' + TY.map(function(t){
         var rs = src.map(function(r){ return [r[0], r[off + SUBI[t[0]]]]; });
         return '<div class="tcard"><div class="tc-body"><span class="tc-type">' + t[1] + '</span><h3 class="display">' + t[2] + '</h3>' +
-          rs.map(function(r){ return '<div class="row"><span>' + r[0] + '</span><span>' + fmt(r[1]) + '</span></div>'; }).join('') + '</div><div class="tc-img" aria-hidden="true"></div></div>';
+          rs.map(function(r){ return '<div class="row"><span>' + r[0] + '</span><span>' + fmt(r[1]) + '</span></div>'; }).join('') + '</div><div class="tc-img" aria-hidden="true">' + slotImg(S.cat + '_' + t[1].slice(-1)) + '</div></div>';
       }).join('') + '</div>';
       return;
     }
@@ -927,10 +962,10 @@ footer{border-top:1px solid var(--line)}
 
     if (rows) {
       var from = Math.min.apply(null, rows.map(function(r){ return r[1]; }));
-      box.innerHTML = '<div class="panel"><div class="sample" aria-hidden="true"></div><div class="info"><h2 class="display">' + title + '</h2><p class="from">FROM ' + fmt(from) + '</p>' +
+      box.innerHTML = '<div class="panel"><div class="sample" aria-hidden="true">' + slotImg('sample_sketch') + '</div><div class="info"><h2 class="display">' + title + '</h2><p class="from">FROM ' + fmt(from) + '</p>' +
         rows.map(function(r){ return '<div class="row"><span>' + r[0] + '</span><span>' + fmt(r[1]) + '</span></div>'; }).join('') + '</div></div>';
     } else {
-      box.innerHTML = '<div class="panel"><div class="sample" style="flex:0 1 220px;min-height:220px" aria-hidden="true"></div><div class="info"><h2 class="display">' + title + '</h2><div class="big">' + fmt(single) + '</div>' +
+      box.innerHTML = '<div class="panel"><div class="sample" style="flex:0 1 220px;min-height:220px" aria-hidden="true">' + slotImg('sample_' + S.cat) + '</div><div class="info"><h2 class="display">' + title + '</h2><div class="big">' + fmt(single) + '</div>' +
         (incl.length ? '<ul class="incl">' + incl.map(function(i){ return '<li>' + i + '</li>'; }).join('') + '</ul>' : '') + '</div></div>';
     }
   }
@@ -948,9 +983,10 @@ footer{border-top:1px solid var(--line)}
         items.map(function(a){
           var tag = a.kind && KN[a.kind] ? '<em class="tag">' + KN[a.kind] + '</em>' : '';
           if (!ARTS) return '<button type="button" class="art" data-open="' + o + '" aria-label="ดูภาพเต็มจอ">' + tag + '</button>';
-          var full = a.src || artSrc(a, 2400);
-          return '<button type="button" class="art" data-open="' + o + '" data-full="' + esc(full) + '" aria-label="ดูภาพเต็มจอ' + (a.kind ? ' · ' + KN[a.kind] : '') + '">' +
-            '<img class="artimg" src="' + esc(artSrc(a)) + '" alt="" loading="lazy" referrerpolicy="no-referrer"' + (a.src ? '' : ' onerror="if(!this.dataset.r){this.dataset.r=1;this.src=\'' + artAlt(a) + '\'}"') + '>' + tag + '</button>';
+          var full = a.src || artSrc(a, 2400), hide = a.nsfw && !S.ageOk;
+          var act = hide ? 'data-unblur="1" aria-label="ภาพ NSFW · กดยืนยันว่าอายุ 18 ปีขึ้นไปเพื่อดู"' : 'data-open="' + o + '" data-full="' + esc(full) + '" aria-label="ดูภาพเต็มจอ' + (a.kind ? ' · ' + KN[a.kind] : '') + '"';
+          return '<button type="button" class="art' + (hide ? ' nsfwb' : '') + '" ' + act + '>' +
+            '<img class="artimg" src="' + esc(artSrc(a)) + '" alt="" loading="lazy" referrerpolicy="no-referrer"' + (a.src ? '' : ' onerror="if(!this.dataset.r){this.dataset.r=1;this.src=\'' + artAlt(a) + '\'}"') + '>' + tag + (hide ? '<span class="ageov"><b>18+</b><small>ฉันอายุ 18 ปีขึ้นไป · กดเพื่อดู</small></span>' : '') + '</button>';
         }).join('') + '</div></section>';
     };
     var html = group('land', 'LANDSCAPE', 'ภาพแนวนอน') + group('port', 'PORTRAIT', 'ภาพแนวตั้ง');
@@ -1045,8 +1081,9 @@ footer{border-top:1px solid var(--line)}
   document.addEventListener('click', function(e){
     if (e.target.id === 'lightbox' || e.target.closest('#lbclose')) { $('lightbox').hidden = true; return; }
     if (e.target.closest('[data-todo]')) { e.preventDefault(); return; }
-    var t = e.target.closest('[data-go],[data-cur],[data-cat],[data-sub],[data-art],[data-open],#agebtn,#dmlink,#backbtn');
+    var t = e.target.closest('[data-go],[data-cur],[data-cat],[data-sub],[data-art],[data-open],[data-unblur],#agebtn,#dmlink,#backbtn');
     if (!t) return;
+    if (t.dataset.unblur) { S.ageOk = true; renderGallery(); renderPrices(); return; }
     if (t.dataset.open) { var fu = t.dataset.full; $('lbimg').classList.toggle('land', t.dataset.open === 'land'); $('lbimg').style.backgroundImage = fu ? 'url("' + fu + '")' : '';  $('lightbox').hidden = false; return; }
     if (t.id === 'dmlink') return;
     if (t.id === 'backbtn') { S.cat = null; renderPrices(); window.scrollTo(0, 0); return; }
@@ -1055,7 +1092,7 @@ footer{border-top:1px solid var(--line)}
     if (t.dataset.cat) { S.cat = t.dataset.cat; renderPrices(); window.scrollTo(0, 0); return; }
     if (t.dataset.sub) { S.sub = t.dataset.sub; renderPrices(); return; }
     if (t.dataset.art) { S.art = t.dataset.art; renderGallery(); return; }
-    if (t.id === 'agebtn') { S.ageOk = true; renderPrices(); }
+    if (t.id === 'agebtn') { S.ageOk = true; renderPrices(); renderGallery(); }
   });
 
   // dinosaur footprint trail walking up-right across the hero
@@ -1154,7 +1191,11 @@ footer{border-top:1px solid var(--line)}
 
   function api(body) {
     return fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
-      .then(function (r) { return r.json(); });
+      .then(function (r) { return r.text(); })
+      .then(function (t) {
+        try { return JSON.parse(t); }
+        catch (e) { var er = new Error('server'); er.server = true; er.detail = t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160); throw er; }
+      });
   }
 
   function loadQueue() {
@@ -1162,6 +1203,7 @@ footer{border-top:1px solid var(--line)}
     fetch(API_URL).then(function (r) { return r.json(); }).then(function (d) {
       Q = d && d.ok ? d.rows : []; renderQueue();
       if (d && d.ok && Array.isArray(d.art)) { ARTS = d.art; renderGallery(); if (A.token) enterArt(); }
+      if (d && d.ok && d.slots) { SLOTS = d.slots; renderPrices(); renderSlotAdmin(); }
     }).catch(function () { $('qsrc').textContent = 'โหลดคิวไม่สำเร็จ ลองรีเฟรชหน้าอีกครั้ง'; renderQueue(); });
   }
 
@@ -1346,15 +1388,16 @@ footer{border-top:1px solid var(--line)}
             '<button type="button" class="abtn" data-amove="' + i + '" data-d="1" aria-label="เลื่อนลง"' + (i === AR.rows.length - 1 ? ' disabled' : '') + '>↓</button>' +
             '<button type="button" class="abtn del' + (AR.confirmDel === i ? ' sure' : '') + '" data-adel="' + i + '">' + (AR.confirmDel === i ? 'ยืนยันลบ' : 'ลบ') + '</button></div></div>' +
           '<div class="seg">' + KIND_OPT.map(function (o) { return '<button type="button" data-akind="' + i + '" data-v="' + o[0] + '" aria-pressed="' + ((a.kind || '') === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>' +
-          '<div class="seg">' + ORI_OPT.slice(1).map(function (o) { return '<button type="button" data-aori="' + i + '" data-v="' + o[0] + '" aria-pressed="' + (a.ori === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>' +
+          '<div class="seg">' + ORI_OPT.slice(1).map(function (o) { return '<button type="button" data-aori="' + i + '" data-v="' + o[0] + '" aria-pressed="' + (a.ori === o[0]) + '">' + o[1] + '</button>'; }).join('') +
+            '<button type="button" class="nsfwbtn" data-ansfw="' + i + '" aria-pressed="' + (a.nsfw === true) + '">NSFW</button></div>' +
         '</div></article>';
     }).join('') : '<div class="qempty"><p><b>ยังไม่มีผลงาน</b>เลือกประเภทงาน แล้วกด + อัปโหลดรูป</p></div>';
   }
 
   document.querySelector('.atabs').addEventListener('click', function (e) {
     var b = e.target.closest('[data-atab]'); if (!b) return;
-    var art = b.dataset.atab === 'art';
-    $('aq').hidden = art; $('aart').hidden = !art;
+    var tab = b.dataset.atab;
+    $('aq').hidden = tab !== 'queue'; $('aart').hidden = tab !== 'art'; $('aslots').hidden = tab !== 'slots';
     this.querySelectorAll('[data-atab]').forEach(function (x) { x.setAttribute('aria-selected', String(x === b)); });
   });
 
@@ -1375,6 +1418,7 @@ footer{border-top:1px solid var(--line)}
     }
     if (b.dataset.akind !== undefined) { AR.rows[+b.dataset.akind].kind = b.dataset.v; artDirty(true); renderArtAdmin(); return; }
     if (b.dataset.aori !== undefined) { AR.rows[+b.dataset.aori].ori = b.dataset.v; artDirty(true); renderArtAdmin(); return; }
+    if (b.dataset.ansfw !== undefined) { var it = AR.rows[+b.dataset.ansfw]; it.nsfw = !it.nsfw; artDirty(true); renderArtAdmin(); return; }
   });
 
   // ย่อรูปให้ด้านยาวไม่เกิน 2400px ก่อนอัปโหลด
@@ -1412,16 +1456,16 @@ footer{border-top:1px solid var(--line)}
       shrink(f).then(function (img) {
         var ori = AR.ori === 'auto' ? img.ori : AR.ori;
         if (DEMO) {
-          ARTS = (ARTS || []).concat([{ id: 'demo' + Date.now() + done, src: img.data, ori: ori, kind: AR.kind }]);
+          ARTS = (ARTS || []).concat([{ id: 'demo' + Date.now() + done, src: img.data, ori: ori, kind: AR.kind, nsfw: $('aupnsfw').checked }]);
           return { ok: true, art: ARTS };
         }
-        return api({ action: 'artUpload', token: A.token, data: img.data, ori: ori, kind: AR.kind });
+        return api({ action: 'artUpload', token: A.token, data: img.data, ori: ori, kind: AR.kind, nsfw: $('aupnsfw').checked });
       }).then(function (d) {
         if (d && d.ok) { ARTS = d.art; done++; renderGallery(); enterArt(); next(); return; }
         AR.busy = false;
         if (d && d.error === 'login_required') { A.token = ''; renderAdmin(); $('loginmsg').textContent = 'หมดเวลาเข้าสู่ระบบ ล็อกอินใหม่แล้วอัปโหลดอีกครั้ง'; return; }
         upMsg('อัปโหลดไม่สำเร็จ (' + ((d && d.error) || 'unknown') + ') ลองอีกครั้ง', true);
-      }).catch(function () { AR.busy = false; upMsg('อัปโหลดไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง', true); });
+      }).catch(function (er) { AR.busy = false; upMsg(er && er.server ? 'Google ตอบกลับเป็นหน้าข้อผิดพลาด: ยังไม่ได้อนุญาต Google Drive (รัน setupArtwork) หรือยังไม่ได้ Deploy เวอร์ชันใหม่' + (er.detail ? ' · ' + er.detail : '') : 'อัปโหลดไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง', true); });
     };
     next();
   });
@@ -1431,13 +1475,70 @@ footer{border-top:1px solid var(--line)}
     if (!AR.dirty) return;
     st.textContent = 'กำลังบันทึก…';
     if (DEMO) { ARTS = JSON.parse(JSON.stringify(AR.rows)); renderGallery(); artDirty(false); st.textContent = 'บันทึกแล้ว (โหมดตัวอย่าง)'; return; }
-    api({ action: 'artSave', token: A.token, art: AR.rows.map(function (a) { return { id: a.id, ori: a.ori, kind: a.kind || '' }; }) }).then(function (d) {
+    api({ action: 'artSave', token: A.token, art: AR.rows.map(function (a) { return { id: a.id, ori: a.ori, kind: a.kind || '', nsfw: a.nsfw === true }; }) }).then(function (d) {
       if (d.ok) { ARTS = d.art; renderGallery(); enterArt(); }
       else if (d.error === 'login_required') { A.token = ''; renderAdmin(); $('loginmsg').textContent = 'หมดเวลาเข้าสู่ระบบ ล็อกอินใหม่แล้วบันทึกอีกครั้ง'; }
       else { st.textContent = 'บันทึกไม่สำเร็จ ลองอีกครั้ง'; st.classList.add('warn'); }
     }).catch(function () { st.textContent = 'เชื่อมต่อไม่สำเร็จ ลองอีกครั้ง'; st.classList.add('warn'); });
   });
 
+  /* ---------- admin: commission images ---------- */
+  var SLOT_GROUPS = [
+    ['กรอบหมวด', [['tile_sfw', 'SFW'], ['tile_nsfw', 'NSFW', 1], ['tile_sketch', 'QUICK SKETCH'], ['tile_id', 'ID CARD'], ['tile_chibi', 'CHIBI']]],
+    ['การ์ดราคา SFW', [['sfw_A', 'TYPE A · FULL COLOUR'], ['sfw_B', 'TYPE B · ROUGH COLOUR'], ['sfw_C', 'TYPE C · MONOCHROME']]],
+    ['การ์ดราคา NSFW', [['nsfw_A', 'TYPE A · FULL COLOUR', 1], ['nsfw_B', 'TYPE B · ROUGH COLOUR', 1], ['nsfw_C', 'TYPE C · MONOCHROME', 1]]],
+    ['รูปตัวอย่าง', [['sample_sketch', 'QUICK SKETCH'], ['sample_id', 'ID CARD'], ['sample_chibi', 'CHIBI']]]
+  ];
+  var SL = { busy: false, confirm: '' };
+  function slotMsg(t, warn) { var m = $('slotmsg'); m.textContent = t; m.classList.toggle('warn', !!warn); }
+  function renderSlotAdmin() {
+    if (!$('slotlist')) return;
+    $('slotlist').innerHTML = SLOT_GROUPS.map(function (g) {
+      return '<section class="sgrp"><h3>' + g[0] + '</h3><div class="slots">' + g[1].map(function (sl) {
+        var k = sl[0], has = !!SLOTS[k];
+        return '<article class="slot">' +
+          '<div class="slot-img">' + (has ? slotImg(k) : '<span>ยังไม่มีรูป</span>') + '</div>' +
+          '<div class="slot-body"><b>' + sl[1] + (sl[2] ? ' <em class="nsfwtag">NSFW</em>' : '') + '</b>' +
+            '<div class="slot-act"><label class="abtn" for="sf-' + k + '">' + (has ? 'เปลี่ยนรูป' : '+ เลือกรูป') + '</label>' +
+            '<input type="file" id="sf-' + k + '" class="sr" accept="image/jpeg,image/png,image/webp" data-slot="' + k + '">' +
+            (has ? '<button type="button" class="abtn del' + (SL.confirm === k ? ' sure' : '') + '" data-slotdel="' + k + '">' + (SL.confirm === k ? 'ยืนยันลบ' : 'ลบรูป') + '</button>' : '') +
+          '</div></div></article>';
+      }).join('') + '</div></section>';
+    }).join('');
+  }
+  function slotApply(key, data) {
+    if (DEMO) {
+      if (data) SLOTS[key] = data; else delete SLOTS[key];
+      return Promise.resolve({ ok: true, slots: SLOTS });
+    }
+    return api(data ? { action: 'slotSet', token: A.token, key: key, data: data } : { action: 'slotClear', token: A.token, key: key });
+  }
+  function slotDone(d) {
+    SL.busy = false;
+    if (d && d.ok) { SLOTS = d.slots || {}; renderPrices(); renderSlotAdmin(); slotMsg('บันทึกรูปแล้ว'); return; }
+    if (d && d.error === 'login_required') { A.token = ''; renderAdmin(); $('loginmsg').textContent = 'หมดเวลาเข้าสู่ระบบ ล็อกอินใหม่แล้วลองอีกครั้ง'; return; }
+    slotMsg('บันทึกไม่สำเร็จ (' + ((d && d.error) || 'unknown') + ') ลองอีกครั้ง', true);
+  }
+  function slotFail(er) {
+    SL.busy = false;
+    slotMsg(er && er.server ? 'Google ตอบกลับเป็นหน้าข้อผิดพลาด: ยังไม่ได้รัน setupArtwork หรือยังไม่ได้ Deploy เวอร์ชันใหม่' : 'อัปโหลดไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง', true);
+  }
+  $('aslots').addEventListener('change', function (e) {
+    var inp = e.target; if (!inp.dataset || !inp.dataset.slot) return;
+    var f = inp.files && inp.files[0], key = inp.dataset.slot; inp.value = '';
+    if (!f || SL.busy) return;
+    SL.busy = true; SL.confirm = ''; slotMsg('กำลังอัปโหลด…');
+    shrink(f).then(function (img) { return slotApply(key, img.data); }).then(slotDone).catch(slotFail);
+  });
+  $('aslots').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-slotdel]'); if (!b || SL.busy) return;
+    var key = b.dataset.slotdel;
+    if (SL.confirm !== key) { SL.confirm = key; renderSlotAdmin(); return; }
+    SL.busy = true; SL.confirm = ''; slotMsg('กำลังลบรูป…');
+    slotApply(key, '').then(slotDone).catch(slotFail);
+  });
+
+  renderSlotAdmin();
   loadQueue();
   if (A.token) enterAdmin(); else renderAdmin();
 
